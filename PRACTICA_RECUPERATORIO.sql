@@ -5,7 +5,7 @@
 - Detalle zona
 - Cantidad de Depositos x Zona
 - Cantidad de productos distintos compuestos en sus depositos
-- Producto mas vendido en el aÒo 2012 que tenga stock en al menos uno de sus depositos
+- Producto mas vendido en el a√±o 2012 que tenga stock en al menos uno de sus depositos
 - Mejor encargado perteneciente a esa zona (el que mas vendio en la historia)
 
 El resultado debera ser ordenado por monto total vendido del encargado descendiente*/
@@ -72,183 +72,6 @@ BEGIN
 	END
 END
 GO
-
-
---PRACTICAS GUIAS DE SQL
-
-/*Ejercicio 20*/
-
-SELECT TOP 3 e.empl_codigo AS legajo,
-	   e.empl_nombre AS nombre,
-	   e.empl_apellido AS apellido,
-	   e.empl_ingreso  AS anio_ingreso,
-	   (CASE 
-		WHEN (SELECT COUNT(fact_tipo + fact_sucursal + fact_numero) 
-			 FROM Factura 
-			 WHERE YEAR(fact_fecha) = 2011 AND fact_vendedor = e.empl_codigo) >= 50
-		THEN (SELECT COUNT(fact_tipo + fact_sucursal + fact_numero) 
-			  FROM Factura
-			  WHERE YEAR(fact_fecha) = 2011 AND fact_total > 100 AND fact_vendedor = e.empl_codigo)
-		ELSE  (SELECT COUNT(*) * 0.5 
-			  FROM Factura 
-			  WHERE YEAR(fact_fecha) = 2011  AND fact_vendedor IN (SELECT empl_codigo
-																   FROM Empleado
-																   WHERE empl_jefe = e.empl_codigo))
-		END) AS puntaje_2011,
-
-	   (CASE 
-		WHEN (SELECT COUNT(fact_tipo + fact_sucursal + fact_numero) 
-			 FROM Factura 
-			 WHERE YEAR(fact_fecha) = 2012 AND fact_vendedor = e.empl_codigo) >= 50
-		THEN (SELECT COUNT(*) 
-			  FROM Factura
-			  WHERE YEAR(fact_fecha) = 2012 AND fact_total > 100 AND fact_vendedor = e.empl_codigo)
-		ELSE (SELECT COUNT(*) * 0.5 
-			  FROM Factura 
-			  WHERE YEAR(fact_fecha) = 2012  AND fact_vendedor IN (SELECT empl_codigo
-																   FROM Empleado
-																   WHERE empl_jefe = e.empl_codigo))
-		END) AS puntaje_2012
-
-FROM Empleado e
-ORDER BY 6 DESC
-
-/*Ejercicio 21*/
-
-
-SELECT  YEAR(f.fact_fecha),
-		f.fact_cliente,
-		COUNT(f.fact_tipo + f.fact_sucursal + f.fact_numero)
-FROM Factura f
-JOIN Item_Factura i ON (f.fact_tipo + f.fact_sucursal + f.fact_numero = i.item_tipo + i.item_sucursal + i.item_numero)
-GROUP BY YEAR(f.fact_fecha),f.fact_cliente, f.fact_total, f.fact_total_impuestos
-HAVING(f.fact_total - f.fact_total_impuestos) - SUM(item_precio) > 1 
-
---me da todos los clientes, me falta poner alguna condicion que no permita eso
-
-
-/*Ejercicio 22*/
-
-SELECT r.rubr_detalle,
-	   (CASE
-		WHEN (MONTH(f.fact_fecha) = 1 OR MONTH(f.fact_fecha) = 2 OR MONTH(f.fact_fecha) = 3)
-		THEN '1'
-		WHEN (MONTH(f.fact_fecha) = 4 OR MONTH(f.fact_fecha) = 5 OR MONTH(f.fact_fecha) = 6)
-		THEN '2'
-		WHEN (MONTH(f.fact_fecha) = 7 OR MONTH(f.fact_fecha) = 8 OR MONTH(f.fact_fecha) = 9)
-		THEN '3'
-		ELSE '4'
-		END) AS num_trimestre,
-		COUNT(DISTINCT f.fact_tipo + f.fact_sucursal + f.fact_numero) AS fact_emitidas,
-		COUNT(DISTINCT i.item_producto) AS prod_conRubro_vendidos,
-		YEAR(f.fact_fecha) AS anio_trimestre
-
-FROM Rubro r
- JOIN Producto p ON (p.prod_rubro = r.rubr_id)
- JOIN Item_Factura i ON (p.prod_codigo = i.item_producto)
- JOIN Factura f ON (f.fact_tipo + f.fact_sucursal + f.fact_numero = i.item_tipo + i.item_sucursal + i.item_numero)
-WHERE p.prod_codigo NOT IN (SELECT comp_producto FROM Composicion)
-GROUP BY r.rubr_detalle,CASE
-		WHEN (MONTH(f.fact_fecha) = 1 OR MONTH(f.fact_fecha) = 2 OR MONTH(f.fact_fecha) = 3)
-		THEN '1'
-		WHEN (MONTH(f.fact_fecha) = 4 OR MONTH(f.fact_fecha) = 5 OR MONTH(f.fact_fecha) = 6)
-		THEN '2'
-		WHEN (MONTH(f.fact_fecha) = 7 OR MONTH(f.fact_fecha) = 8 OR MONTH(f.fact_fecha) = 9)
-		THEN '3'
-		ELSE '4'
-		END, YEAR(f.fact_fecha)
-HAVING COUNT(DISTINCT f.fact_tipo + f.fact_sucursal + f.fact_numero)  > 100
-ORDER BY 1 ASC, 3 DESC
-
-
-/*Ejercicio 23*/
-
-SELECT YEAR(f.fact_fecha),
-	   i.item_producto AS prod_comp_masVendido,
-	   (SELECT COUNT(*) 
-		FROM Composicion 
-		WHERE comp_producto = i.item_producto) AS componentes_prod,
-	   COUNT(DISTINCT f.fact_tipo + f.fact_sucursal + f.fact_numero) AS cant_fact_con_prod,
-	   (SELECT TOP 1 fact_cliente
-		FROM Factura
-		JOIN Item_Factura ON (fact_tipo + fact_sucursal + fact_numero = item_tipo + item_sucursal + item_numero)
-		WHERE YEAR(fact_fecha) = YEAR(f.fact_fecha) AND item_producto = i.item_producto
-		GROUP BY fact_cliente
-		ORDER BY SUM(item_cantidad) DESC),
-	  (SUM(i.item_cantidad * i.item_precio) * 100) / SUM(f.fact_total) AS porcentaje_venta
-	   
-FROM Factura f
-JOIN Item_Factura i ON (f.fact_tipo + f.fact_sucursal + f.fact_numero = i.item_tipo + i.item_sucursal + i.item_numero)
-WHERE i.item_producto IN (SELECT TOP 1 prod_codigo
-						  FROM Producto
-						  JOIN Composicion ON (prod_codigo = comp_producto)
-						  JOIN Item_Factura ON (prod_codigo = item_producto)
-						  JOIN Factura ON (fact_numero + fact_sucursal + fact_tipo = item_numero + item_sucursal + item_tipo)
-						  WHERE YEAR(fact_fecha) = YEAR(f.fact_fecha)
-						  GROUP BY prod_codigo
-						  ORDER BY SUM(item_cantidad * item_precio) DESC)
-GROUP BY YEAR(f.fact_fecha), i.item_producto
-ORDER BY SUM(f.fact_total) DESC
-
-
-/*Ejercicio 24*/
-
-SELECT p.prod_codigo AS codigo_prod,
-	   p.prod_detalle AS nombre_prod,
-	   SUM(i.item_cantidad) AS unidades_facturadas
-FROM Producto p
-JOIN Composicion c ON (p.prod_codigo = c.comp_producto)
-JOIN Item_Factura i ON (p.prod_codigo = i.item_producto)
-JOIN Factura f ON (i.item_tipo + i.item_sucursal + i.item_numero = f.fact_tipo + f.fact_sucursal + f.fact_numero)
-WHERE f.fact_vendedor IN (SELECT TOP 2 empl_codigo
-						  FROM Empleado
-						  GROUP BY empl_codigo
-						  ORDER BY SUM(empl_comision) DESC)
-GROUP BY p.prod_codigo, p.prod_detalle
-HAVING COUNT(DISTINCT f.fact_tipo + f.fact_sucursal + f.fact_numero) > 5
-ORDER BY 3 DESC
-
-
-/*Ejercicio 25*/
-
-SELECT YEAR(f.fact_fecha),
-	   fa.fami_id,
-	   (SELECT COUNT(DISTINCT rubr_id)
-		FROM Rubro
-		JOIN Producto ON (prod_rubro = rubr_id)
-		WHERE prod_familia = fa.fami_id),
-	   (SELECT COUNT(comp_componente)
-		FROM Composicion
-		WHERE comp_producto = (SELECT TOP 1 prod_codigo
-							   FROM Producto
-							   JOIN Item_Factura ON (prod_codigo = item_producto)
-							   WHERE prod_familia = fa.fami_id
-							   GROUP BY prod_codigo
-							   ORDER BY SUM(item_cantidad) DESC)),
-	    COUNT(DISTINCT f.fact_tipo + f.fact_sucursal + f.fact_numero),
-		(SELECT TOP 1 fact_cliente
-		 FROM Factura 
-		 JOIN Item_Factura ON (fact_tipo + fact_sucursal + fact_numero = item_tipo + item_sucursal + item_numero)
-		 JOIN Producto ON (item_producto = prod_codigo)
-		 WHERE prod_familia = fa.fami_id
-		 GROUP BY fact_cliente
-		 ORDER BY SUM(item_cantidad) DESC),
-		 (SUM(i.item_cantidad * i.item_precio) * 100) / (SELECT SUM(fact_total)
-					   FROM Factura 
-					   WHERE YEAR(fact_fecha) = YEAR(f.fact_fecha))
-FROM Factura f
-JOIN Item_Factura i ON (f.fact_tipo + f.fact_sucursal + f.fact_numero = i.item_tipo + i.item_sucursal + i.item_numero)
-JOIN Producto p ON (i.item_producto = p.prod_codigo)
-JOIN Familia fa ON (fa.fami_id = p.prod_familia )
-WHERE fa.fami_id IN    (SELECT TOP 1 prod_familia
-						FROM Producto
-						JOIN Item_Factura ON item_producto = prod_codigo
-						JOIN Factura ON fact_numero = item_numero AND fact_sucursal = item_sucursal AND fact_tipo = item_tipo
-						GROUP BY prod_familia
-						ORDER BY SUM(item_cantidad) DESC)
-GROUP BY YEAR(f.fact_fecha), fa.fami_id
-ORDER BY SUM(f.fact_total) DESC, fa.fami_id DESC
-
 
 --PRACTICA TSQL
 
@@ -353,7 +176,7 @@ CLOSE*/
 
 --trigger (en la actualidad la regla se cumple)
 
-/*Ningun jefe puede tener menos de 5 aÒos de antiguedad y tampoco puede tener mas del 50% del personal
+/*Ningun jefe puede tener menos de 5 a√±os de antiguedad y tampoco puede tener mas del 50% del personal
 a su cargo (contando directos e indirectos) a excepcion del gerente general*/
 
 --Existe un unico gerente general
@@ -392,7 +215,7 @@ BEGIN
 	
 END
 
---si tiene menos de cinco aÒos se queda ahi, sino pasa al siguiente else if donde controlamos los empleados
+--si tiene menos de cinco a√±os se queda ahi, sino pasa al siguiente else if donde controlamos los empleados
 
 
 
@@ -445,11 +268,11 @@ GO
 
 /* FOTO 6
 Mostrar los dos empleados del mes, estos son:
-a) El empleado que en el mes actual (en el cual se ejecuta la query) vendiÛ m·s en dinero(fact_total).
-b) El segundo empleado del mes, es aquel que en el mes actual (en el cual se ejecuta la query) vendiÛ m·s cantidades (unidades de productos).
-Se deber· mostrar apellido y nombre del empleado en una sola columna y para el primero un string que diga 'MEJOR FACTURACION' y para el segundo
-'VENDI” M¡S UNIDADES'.
-NOTA: Si el empleado que m·s vendiÛ en facturaciÛn y cantidades es el mismo, solo mostrar una fila que diga el empleado y 'MEJOR EN TODO'.
+a) El empleado que en el mes actual (en el cual se ejecuta la query) vendi√≥ m√°s en dinero(fact_total).
+b) El segundo empleado del mes, es aquel que en el mes actual (en el cual se ejecuta la query) vendi√≥ m√°s cantidades (unidades de productos).
+Se deber√° mostrar apellido y nombre del empleado en una sola columna y para el primero un string que diga 'MEJOR FACTURACION' y para el segundo
+'VENDI√ì M√ÅS UNIDADES'.
+NOTA: Si el empleado que m√°s vendi√≥ en facturaci√≥n y cantidades es el mismo, solo mostrar una fila que diga el empleado y 'MEJOR EN TODO'.
 NOTA2: No se debe usar subselect en el from
 */
 
@@ -507,17 +330,17 @@ ORDER BY e.empl_codigo ASC
 
 
 /* FOTO 6 T-SQL
-Realizar un stored procedure que dado un numero de factura,tipo y sucursal inserte un nuevo registro de item, actualicÈ los valores de totales de
-factura m·s impuestos y reste el stock de ese producto en la tabla correspondiente. Se debe validar previamente la existencia del stock en ese 
-depÛsito y en caso de no haber, no realizar nada.
-Los parametros de entrada son datos de la factura,cÛdigo del producto y cantidad.
+Realizar un stored procedure que dado un numero de factura,tipo y sucursal inserte un nuevo registro de item, actualic√© los valores de totales de
+factura m√°s impuestos y reste el stock de ese producto en la tabla correspondiente. Se debe validar previamente la existencia del stock en ese 
+dep√≥sito y en caso de no haber, no realizar nada.
+Los parametros de entrada son datos de la factura,c√≥digo del producto y cantidad.
 
 Al total de factura se le suma lo correspondiente solo al nuevo item sin hacer recalculos, y en los impuestos se le suma 21% de dicho valor 
 redondeado a dos decimales, se debe contemplar la posibilidad que esos dos campos esten en NULL al comienzo del procedure.
-Se debe programar una transacciÛn para que las tres operaciones se realicen atÛmicamente, se asume que todos los par·metros recibidos est·n 
-validados a excepciÛn de la cantidad de producto del stock.
+Se debe programar una transacci√≥n para que las tres operaciones se realicen at√≥micamente, se asume que todos los par√°metros recibidos est√°n 
+validados a excepci√≥n de la cantidad de producto del stock.
 
-Queda a criterio del alumno que acciones tomar en caso de que no se cumpla la ˙nica validaciÛn o no se produzca un error no provisto.
+Queda a criterio del alumno que acciones tomar en caso de que no se cumpla la √∫nica validaci√≥n o no se produzca un error no provisto.
 */
 
 CREATE PROCEDURE ejercicio2 (@NumFactura CHAR(8), @TipoFactura CHAR(1), @SucursFactura CHAR(8), @CodProducto CHAR(8), @CantProd INT)
@@ -562,19 +385,19 @@ GO
 
 --PARCIAL 2
 
-/*1)Escriba una consulta SQL que retorne un ranking de facturacion por aÒo y zona
+/*1)Escriba una consulta SQL que retorne un ranking de facturacion por a√±o y zona
 devolviendo las siguientes columnas:
 
-- A—O
+- A√ëO
 - COD DE ZONA
 - DETALLE DE ZONA
 - CANT DE DEPOSITOS DE LA ZONA
 - CANT DE EMPLEADOS DE DEPARTAMENTOS DE ESA ZONA
-- EMPLEADO QUE MAS VENDIO EN ESE A—O Y ESA ZONA
-- MONTO TOTAL DE VENTA DE ESA ZONA EN ESE A—O
-- PORCENTAJE DE LA VENTA DE ESE A—O EN ESA ZONA RESPECTO AL TOTAL VENDIDO DE ESE A—O
+- EMPLEADO QUE MAS VENDIO EN ESE A√ëO Y ESA ZONA
+- MONTO TOTAL DE VENTA DE ESA ZONA EN ESE A√ëO
+- PORCENTAJE DE LA VENTA DE ESE A√ëO EN ESA ZONA RESPECTO AL TOTAL VENDIDO DE ESE A√ëO
 
-Los datos deberan estar ordenados por aÒo y dentro del aÒo por la zona con mas facturacion
+Los datos deberan estar ordenados por a√±o y dentro del a√±o por la zona con mas facturacion
 de mayor a menor */
 
 SELECT  YEAR(f.fact_fecha),
@@ -649,7 +472,7 @@ GO
 
 /*Ejercicio 1*/
 
---clientes que compraron en dos aÒos consecutivos (que tenga una factura del aÒo anterior y del actual)
+--clientes que compraron en dos a√±os consecutivos (que tenga una factura del a√±o anterior y del actual)
 
 SELECT c.clie_codigo,
 	   c.clie_razon_social,
